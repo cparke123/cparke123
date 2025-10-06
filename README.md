@@ -1,6 +1,6 @@
 - 👋 Hi, I’m @cparke123
 - 👀 I’m interested in ... learning how to code. 
-- 🌱 I’m currently learning ... Anything. Specifying on JavaScript at the moment. 
+- 🌱 I’m currently learning ... Anything. Currently C++ and Python. 
 - 💞️ I’m looking to collaborate on ... Anything basic. 
 - 📫 How to reach me ... N/A
 - 😄 Pronouns: ... He/him/his
