@@ -415,8 +415,129 @@ class CopyTraderBot:
 
 
 # ---------------------------------------------------------------------------
-# Demo mode
+# Demo / headless-demo bot (for weekly_runner --demo)
 # ---------------------------------------------------------------------------
+
+class DemoCopyTraderBot:
+    """
+    Drop-in replacement for CopyTraderBot that uses synthetic whale signals
+    and a mock paper-trading backend — no network required.
+    Implements run_timed() so weekly_runner.py can call it directly.
+    """
+
+    def __init__(self):
+        import random as _random
+        self._rng = _random
+        config.PAPER_TRADING = True
+
+        # Build a fully offline paper trader: subclass PaperPolymarketTrader,
+        # bypass its __init__ (which creates a ClobClient), and override
+        # get_token_price to return synthetic prices.
+        from polymarket_trader import PaperPolymarketTrader, PolymarketTrader
+
+        rng = _random
+
+        class OfflinePaperBackend(PaperPolymarketTrader):
+            def __init__(self_inner):           # no super().__init__() → no network
+                self_inner._balance_usd = 1_000.0
+                self_inner._bets: list = []
+                self_inner._closed_bets: list = []
+
+            def get_token_price(self_inner, token_id: str) -> float:
+                base = 0.55 if "yes" in token_id else 0.45
+                return max(0.01, min(0.99, base + rng.uniform(-0.08, 0.08)))
+
+        # Build PolymarketTrader facade without its __init__ (avoids backend check)
+        facade = PolymarketTrader.__new__(PolymarketTrader)
+        facade._backend = OfflinePaperBackend()
+        self._trader = facade
+
+        self._markets = [
+            BTC15MinMarket(
+                condition_id="0xaaa",
+                question="Will BTC be higher in the next 15 minutes?",
+                slug="btc-higher-15min",
+                yes_token_id="yes_token_1",
+                no_token_id="no_token_1",
+                yes_price=0.54, no_price=0.46,
+                volume=320_000, volume_24h=48_000,
+                end_date="2026-03-23T23:59:00Z",
+            ),
+            BTC15MinMarket(
+                condition_id="0xbbb",
+                question="Will BTC price increase in the next 15 minutes?",
+                slug="btc-increase-15min",
+                yes_token_id="yes_token_2",
+                no_token_id="no_token_2",
+                yes_price=0.51, no_price=0.49,
+                volume=180_000, volume_24h=22_000,
+                end_date="2026-03-23T23:59:00Z",
+            ),
+        ]
+        self._last_bet_time: float = 0.0
+        self._running = False
+
+    def _fire_signal(self):
+        rng = self._rng
+        direction = rng.choice(["UP", "DOWN"])
+        outcome = "YES" if direction == "UP" else "NO"
+        market = rng.choice(self._markets)
+        size = rng.uniform(5_000, 80_000)
+        token_id = market.yes_token_id if outcome == "YES" else market.no_token_id
+
+        if time.time() - self._last_bet_time < config.COOLDOWN_SECONDS:
+            return
+
+        bet_size = self._trader.compute_bet_size(size)
+        self._trader.place_bet(
+            outcome=outcome,
+            token_id=token_id,
+            cost_usd=bet_size,
+            market_question=market.question,
+            condition_id=market.condition_id,
+            market_end_date=market.end_date,
+        )
+        self._last_bet_time = time.time()
+
+    def _position_manager_loop(self):
+        while self._running:
+            exits = self._trader.check_exit_conditions()
+            for bet, reason in exits:
+                self._trader.sell_bet(bet, reason)
+            time.sleep(10)
+
+    def run_timed(self, duration_secs: float) -> dict:
+        self._running = True
+        threading.Thread(
+            target=self._position_manager_loop, daemon=True, name="DemoPM"
+        ).start()
+
+        # Fire a synthetic signal roughly every 30 s
+        deadline = time.time() + duration_secs
+        last_signal_t = 0.0
+        while self._running and time.time() < deadline:
+            if time.time() - last_signal_t >= 30:
+                self._fire_signal()
+                last_signal_t = time.time()
+            time.sleep(2)
+
+        self._running = False
+        self._trader.sell_all(reason="session-end")
+
+        closed = self._trader.closed_bets
+        bets_won  = sum(1 for b in closed if b.get("pnl", 0) > 0)
+        bets_lost = sum(1 for b in closed if b.get("pnl", 0) <= 0)
+        total_wagered = sum(b.get("cost_usd", 0) for b in closed)
+
+        return {
+            "realized_pnl":   self._trader.total_realized_pnl(),
+            "unrealized_pnl": self._trader.total_unrealized_pnl(),
+            "bets_placed":    len(closed),
+            "bets_won":       bets_won,
+            "bets_lost":      bets_lost,
+            "total_wagered":  total_wagered,
+        }
+
 
 def run_demo():
     import random

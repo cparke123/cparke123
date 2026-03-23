@@ -70,20 +70,21 @@ def save_report(data: dict) -> None:
 # Daily session
 # ---------------------------------------------------------------------------
 
-def run_day(day_num: int, session_secs: float, live: bool) -> dict:
+def run_day(day_num: int, session_secs: float, live: bool, demo: bool = False) -> dict:
     """Run one day's trading session and return the day's summary."""
-    # Import here so config is already patched before CopyTraderBot initialises
-    from auto_trader import CopyTraderBot
+    # Import here so config is already patched before bot initialises
+    from auto_trader import CopyTraderBot, DemoCopyTraderBot
 
     date_str = datetime.now().strftime("%Y-%m-%d")
+    mode_label = "[magenta]DEMO[/magenta]" if demo else ("[red bold]LIVE[/red bold]" if live else "[yellow]PAPER[/yellow]")
     console.print(
         f"\n[bold cyan]Day {day_num}/7 — {date_str}[/bold cyan]  "
         f"Session: {session_secs/3600:.1f}h  "
         f"Bet size: ${config.BET_SIZE_USD:.0f}  "
-        f"Mode: {'[red bold]LIVE[/red bold]' if live else '[yellow]PAPER[/yellow]'}\n"
+        f"Mode: {mode_label}\n"
     )
 
-    bot = CopyTraderBot(live=live)
+    bot = DemoCopyTraderBot() if demo else CopyTraderBot(live=live)
     start = time.time()
 
     try:
@@ -233,6 +234,8 @@ def main():
                         help="Delete saved progress and start fresh")
     parser.add_argument("--no-wait", action="store_true",
                         help="Run all 7 sessions back-to-back without waiting 24h between days")
+    parser.add_argument("--demo", action="store_true",
+                        help="Use synthetic signals — no network/Polymarket access needed")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -275,7 +278,7 @@ def main():
         f"Start date:    {data['start_date']}\n"
         f"Session length: {args.session_hours:.1f}h / day\n"
         f"Bet size:       ${config.BET_SIZE_USD:.0f} per signal\n"
-        f"Mode:           {'LIVE' if args.live else 'PAPER'}\n"
+        f"Mode:           {'DEMO (synthetic signals)' if args.demo else ('LIVE' if args.live else 'PAPER')}\n"
         f"Days completed: {len(completed_days)}/7",
         title="Weekly Runner",
         border_style="cyan",
@@ -286,7 +289,7 @@ def main():
             console.print(f"[dim]Day {day_num} already completed — skipping.[/dim]")
             continue
 
-        result = run_day(day_num, session_secs, live=args.live)
+        result = run_day(day_num, session_secs, live=args.live, demo=args.demo)
         data["days"].append(result)
         save_report(data)
 
