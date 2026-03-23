@@ -1,99 +1,78 @@
 """
-Configuration for the Polymarket BTC 15-min whale copy-trader.
+Configuration for the Polymarket → Gemini auto-trader.
 
-Copy this file and fill in your credentials before running in live mode.
+Copy this file and fill in your real API keys before running in live mode.
 All dollar amounts are in USD.
-
-HOW TO GET YOUR POLYMARKET CREDENTIALS:
-  1. Go to polymarket.com and connect your wallet
-  2. Your POLYMARKET_PRIVATE_KEY is the private key of the wallet you use
-     to sign into Polymarket (MetaMask, etc.)
-  3. Run: python auto_trader.py --derive-keys
-     This will print your API key/secret/passphrase — copy them here.
-  4. Make sure your wallet has USDC on Polygon for placing bets.
 """
 
 # ---------------------------------------------------------------------------
-# Polymarket trading credentials
+# Gemini API credentials
+# Get these from: https://exchange.gemini.com/settings/api
+# Required scopes: "Fund Management" + "Trading" (read + create orders)
 # ---------------------------------------------------------------------------
+GEMINI_API_KEY = ""       # e.g. "account-xxxxxxxxxxxxxxxxxx"
+GEMINI_API_SECRET = ""    # e.g. "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
-# Your Ethereum private key (the wallet you use on polymarket.com).
-# Used to derive the L2 API key and sign orders.
-# NEVER share this. Start with 0x...
-POLYMARKET_PRIVATE_KEY = ""
-
-# L2 API credentials — generated from your private key.
-# Run `python auto_trader.py --derive-keys` to generate these.
-POLYMARKET_API_KEY = ""
-POLYMARKET_API_SECRET = ""
-POLYMARKET_API_PASSPHRASE = ""
-
-# Polygon chain ID (137 = mainnet, 80002 = Amoy testnet)
-# Use 80002 + PAPER_TRADING=True while testing
-CHAIN_ID = 137
-
-# Paper trading: simulate bets without spending USDC.
-# Set to False only when you are ready to spend real money.
+# Set to True to use Gemini's sandbox (no real money)
+# Sandbox URL: https://exchange.sandbox.gemini.com
+# Get sandbox keys from: https://exchange.sandbox.gemini.com/settings/api
 PAPER_TRADING = True
 
 # ---------------------------------------------------------------------------
-# Signal detection settings
+# Polymarket signal settings
 # ---------------------------------------------------------------------------
 
-# Minimum single-trade size (USD) on Polymarket to trigger a copy
+# Minimum single-trade size (USD) on Polymarket to trigger a signal
 WHALE_THRESHOLD_USD = 5_000
 
 # How often to poll Polymarket for new trades (seconds)
+# Lower = faster signals but more API calls. Recommended: 5–15s
 POLL_INTERVAL_SECONDS = 10
 
-# Ignore signals older than this many seconds (prevents replaying history
-# after a restart)
+# Ignore signals from trades older than this many seconds (prevents acting
+# on historical data after a restart)
 MAX_SIGNAL_AGE_SECONDS = 30
 
 # ---------------------------------------------------------------------------
-# Bet sizing
+# Trade execution settings
 # ---------------------------------------------------------------------------
 
-# Fixed USDC amount to bet per signal.
-BET_SIZE_USD = 50.0
+# USD value of BTC to buy/sell per signal
+TRADE_SIZE_USD = 100.0
 
-# OR: bet this fraction of the whale's trade size (0 = use BET_SIZE_USD).
-# Example: 0.01 = bet 1% of what the whale bet.
-BET_FRACTION_OF_WHALE = 0.0
+# Maximum total open position (USD). Bot will not open new trades if
+# current exposure exceeds this.
+MAX_OPEN_POSITION_USD = 500.0
 
-# Maximum total USDC committed across all open bets.
-MAX_OPEN_EXPOSURE_USD = 300.0
+# Auto-close position after N seconds (align with 15-min market = 900s)
+# Set to 0 to disable auto-close (manage positions manually)
+AUTO_CLOSE_AFTER_SECONDS = 900   # 15 minutes
 
-# Minimum seconds between placing new bets (cooldown).
+# Minimum seconds between trades (cooldown). Prevents rapid-fire signals
+# from stacking too many positions.
 COOLDOWN_SECONDS = 60
 
-# ---------------------------------------------------------------------------
-# Exit strategy
-# ---------------------------------------------------------------------------
+# If the position moves against you by this % of trade value, close it
+STOP_LOSS_PCT = 0.03     # 3% stop-loss
 
-# Most 15-min markets resolve on their own — you can just hold to resolution.
-# Set AUTO_SELL_BEFORE_CLOSE_SECONDS > 0 to sell your position N seconds
-# before the market closes (useful to lock in gains or cut losses early).
-AUTO_SELL_BEFORE_CLOSE_SECONDS = 0   # 0 = hold to resolution
-
-# Sell if the token price drops this much from your entry (as a fraction).
-# Example: 0.30 = sell if price drops 30 cents on a token you bought at $0.60
-STOP_LOSS_PRICE_DROP = 0.30
-
-# Sell if the token price rises this much from your entry.
-TAKE_PROFIT_PRICE_RISE = 0.30
+# If the position is up by this %, take profit and close
+TAKE_PROFIT_PCT = 0.05   # 5% take-profit
 
 # ---------------------------------------------------------------------------
 # Signal filtering
 # ---------------------------------------------------------------------------
 
-# Require the market's implied probability to agree with the whale's direction.
-# (YES > 50% for UP signals, NO > 50% for DOWN signals)
+# Only act on signals where the whale is betting in the same direction as
+# the current market majority (YES > 0.5 for UP, NO > 0.5 for DOWN).
+# Reduces contrarian noise.
 REQUIRE_MARKET_AGREEMENT = False
 
-# Number of whale trades in the same direction within CONFIRMATION_WINDOW_SECONDS
-# before we act. Set to 1 to copy every qualifying whale trade immediately.
+# Minimum number of distinct whale trades in the same direction within the
+# last CONFIRMATION_WINDOW_SECONDS before executing. Set to 1 to act on
+# every signal immediately.
 SIGNAL_CONFIRMATION_COUNT = 1
+
+# Window in seconds for counting confirming signals
 CONFIRMATION_WINDOW_SECONDS = 120
 
 # ---------------------------------------------------------------------------
