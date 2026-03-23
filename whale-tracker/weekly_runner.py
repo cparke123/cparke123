@@ -231,6 +231,8 @@ def main():
                         help="Print the saved weekly report and exit")
     parser.add_argument("--reset", action="store_true",
                         help="Delete saved progress and start fresh")
+    parser.add_argument("--no-wait", action="store_true",
+                        help="Run all 7 sessions back-to-back without waiting 24h between days")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -289,18 +291,21 @@ def main():
         save_report(data)
 
         if day_num < 7:
-            # Wait until the same time tomorrow
-            next_run = datetime.now() + timedelta(days=1)
-            wait_secs = (next_run - datetime.now()).total_seconds()
-            console.print(
-                f"[dim]Next session in {wait_secs/3600:.1f}h "
-                f"(~{next_run.strftime('%Y-%m-%d %H:%M')}).[/dim]"
-            )
-            try:
-                time.sleep(wait_secs)
-            except KeyboardInterrupt:
-                console.print("\n[yellow]Interrupted — progress saved. Re-run to continue.[/yellow]")
-                break
+            if args.no_wait:
+                console.print(f"[dim]--no-wait: starting Day {day_num + 1} immediately.[/dim]")
+            else:
+                # Wait until the same time tomorrow
+                next_run = datetime.now() + timedelta(days=1)
+                wait_secs = (next_run - datetime.now()).total_seconds()
+                console.print(
+                    f"[dim]Next session in {wait_secs/3600:.1f}h "
+                    f"(~{next_run.strftime('%Y-%m-%d %H:%M')}).[/dim]"
+                )
+                try:
+                    time.sleep(wait_secs)
+                except KeyboardInterrupt:
+                    console.print("\n[yellow]Interrupted — progress saved. Re-run to continue.[/yellow]")
+                    break
 
     print_weekly_report(data)
 
