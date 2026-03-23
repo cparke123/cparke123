@@ -368,6 +368,51 @@ class CopyTraderBot:
                 live.update(layout)
                 time.sleep(2)
 
+    def run_timed(self, duration_secs: float) -> dict:
+        """
+        Run the bot headlessly for `duration_secs`, then stop and return a
+        PnL summary dict. Used by weekly_runner.py.
+
+        Returns:
+            {
+              "realized_pnl":   float,
+              "unrealized_pnl": float,
+              "bets_placed":    int,
+              "bets_won":       int,
+              "bets_lost":      int,
+              "total_wagered":  float,
+            }
+        """
+        self._running = True
+        self._monitor.start()
+
+        pm_thread = threading.Thread(
+            target=self._position_manager_loop, daemon=True, name="PositionManager"
+        )
+        pm_thread.start()
+
+        deadline = time.time() + duration_secs
+        while self._running and time.time() < deadline:
+            time.sleep(5)
+
+        self._running = False
+        self._monitor.stop()
+        self._trader.sell_all(reason="session-end")
+
+        closed = self._trader.closed_bets
+        bets_won  = sum(1 for b in closed if b.get("pnl", 0) > 0)
+        bets_lost = sum(1 for b in closed if b.get("pnl", 0) <= 0)
+        total_wagered = sum(b.get("cost_usd", 0) for b in closed)
+
+        return {
+            "realized_pnl":   self._trader.total_realized_pnl(),
+            "unrealized_pnl": self._trader.total_unrealized_pnl(),
+            "bets_placed":    len(closed),
+            "bets_won":       bets_won,
+            "bets_lost":      bets_lost,
+            "total_wagered":  total_wagered,
+        }
+
 
 # ---------------------------------------------------------------------------
 # Demo mode
