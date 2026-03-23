@@ -1,0 +1,14 @@
+# Logs
+*.log
+whale_trader.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Secrets (never commit these)
+.env
+secrets.py
